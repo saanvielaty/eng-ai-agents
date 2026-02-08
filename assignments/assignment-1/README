@@ -1,0 +1,17 @@
+**Name of the Assignment:** Assignment 1
+**Date of Submission:** February 8 2026
+**Student Name:** Saanvi Elaty  
+
+
+This assignment includes two notebooks:
+1. **PyTorch Verification Notebook** (`index.ipynb`) — confirms the environment runs PyTorch correctly.
+2. **Low-Rank Gaussian Covariances Notebook** (`low_rank_gaussians_1.ipynb`) — explores how low-rank and diffuse coefficient changes affect Gaussian covariance structure.
+
+This assignment includes 2 screenshots:
+1. Showing the development environment 
+2. Showing my Hugging Face Profile
+
+Instructions on How to Run the Notebooks
+
+You can run both notebooks **either in Google Colab (recommended)** or locally in **VS Code/Jupyter**.  
+
