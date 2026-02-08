@@ -73,6 +73,7 @@ make clean                    # Remove build artifacts
 
 ### Container Services (docker-compose.yml)
 - **torch.dev.gpu**: PyTorch development with CUDA 12.8 (default)
+- **torch.dev.cpu**: PyTorch development, CPU-only (no GPU required)
 - **ros.dev.gpu**: ROS 2 Jazzy with TurtleBot3, slam-toolbox, foxglove-bridge
 
 Switch services by editing the `"service"` field in `.devcontainer/devcontainer.json` and rebuilding the container.
@@ -110,9 +111,56 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 
 Useful aliases in ROS container: `cbuild` (colcon build), `ssetup` (source setup), `rosdi` (rosdep install), `cyclone`/`fastdds` (RMW selection).
 
+## Notebook Execution
+
+**CRITICAL**: Notebooks MUST always be executed inside their corresponding Docker container, never on the host. Each notebook's execution environment is specified in `notebooks/notebook-database.yml`.
+
+### Execution Environments
+- **`torch.dev.gpu`** — PyTorch notebooks with CUDA (most notebooks)
+- **`torch.dev.cpu`** — PyTorch notebooks, CPU-only fallback
+- **`ros.dev.gpu`** — ROS 2 robotics notebooks
+- **`colab`** — Google Colab only (cannot run locally, skipped automatically)
+
+### Running Notebooks (from host)
+The `make execute-notebook` target automatically looks up the environment from the registry and runs via `docker compose run`:
+```bash
+# Single notebook — auto-detects Docker service from registry
+make execute-notebook NOTEBOOK=reinforcement-learning/prediction/td-vs-mc-mrp.ipynb
+
+# All registered notebooks (uses torch.dev.gpu by default, colab notebooks are skipped)
+make execute-all-notebooks
+
+# All registered notebooks in CPU container
+make execute-all-notebooks ENV=torch.dev.cpu
+```
+
+These make targets:
+1. Look up the notebook's environment in `notebooks/notebook-database.yml`
+2. Launch the appropriate Docker container via `docker compose run`
+3. Install notebook dependencies (`make install-notebooks`) inside the container
+4. Execute with papermill and extract output artifacts (images, Plotly HTML, tables)
+
+### Artifact Extraction
+After execution, artifacts are automatically extracted from notebook cell outputs into `notebooks/<topic>/output/`:
+- `output/images/*.png` — Matplotlib plots (base64-decoded from cell outputs)
+- `output/images/*.html` — Plotly interactive charts (self-contained HTML)
+- `output/text/*.html` — HTML tables (DataFrames, styled tables)
+
+All output dirs are gitignored via `notebooks/**/output/`.
+
+### Prerequisites (Inside Container)
+```bash
+make start                    # Initial environment setup
+make install-notebooks        # Install notebook deps (matplotlib, sklearn, etc.) + register kernel
+```
+
+### Adding Notebook Dependencies
+Notebook-specific packages (matplotlib, seaborn, scikit-learn, etc.) live in `pyproject.toml` under `[project.optional-dependencies] notebooks`. Add new packages there and re-run `make install-notebooks`.
+
 ## Port Mappings (configurable via .env)
 
 | Service | Jupyter | Quarto | Dev Server | ROS Master | Foxglove |
 |---------|---------|--------|------------|------------|----------|
 | torch.dev.gpu | 8888 | 4100 | 8000 | - | - |
+| torch.dev.cpu | 8889 | 4101 | 8001 | - | - |
 | ros.dev.gpu | 8880 | 4180 | 8078 | 11311 | 8765 |

@@ -2,9 +2,15 @@
 """Execute a notebook with papermill and save artifacts."""
 
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import papermill as pm
+
+from extract_artifacts import extract_artifacts
+from update_registry import update_registry_entry
+from wandb_utils import finish_wandb_run, init_wandb_run, log_notebook_result
 
 
 def execute_notebook(notebook_path: str, output_base: str = "notebooks") -> None:
@@ -39,24 +45,46 @@ def execute_notebook(notebook_path: str, output_base: str = "notebooks") -> None
     print(f"Output notebook: {output_nb}")
     print(f"Artifact directory: {output_dir}")
 
+    # Start W&B run for this notebook execution
+    run = init_wandb_run(notebook_path)
+
     # Execute with papermill
     try:
+        start = time.monotonic()
         pm.execute_notebook(
             str(nb_file),
             str(output_nb),
-            parameters={
-                "output_dir": str(output_dir),
-                "images_dir": str(output_dir / "images"),
-                "videos_dir": str(output_dir / "videos"),
-                "audio_dir": str(output_dir / "audio"),
-                "text_dir": str(output_dir / "text"),
-            },
+            kernel_name="python3",
             log_output=True,
         )
+        duration = time.monotonic() - start
+        executed_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
         print(f"\n✓ Notebook executed successfully: {output_nb}")
+        print(f"  Duration: {duration:.1f}s")
+
+        # Update registry with execution metadata
+        update_registry_entry(notebook_path, executed_date, duration)
+
+        # Extract artifacts from the executed notebook
+        counts = extract_artifacts(output_nb, output_dir)
+        total = sum(counts.values())
+        if total > 0:
+            print(
+                f"  Extracted {counts['png']} PNG(s), "
+                f"{counts['plotly']} Plotly chart(s), "
+                f"{counts['html_table']} HTML table(s)"
+            )
+
+        # Log results to W&B
+        log_notebook_result(run, duration, executed_date, counts, output_dir)
     except Exception as e:
+        if run is not None:
+            run.summary["status"] = "failed"
         print(f"\n✗ Notebook execution failed: {e}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        finish_wandb_run(run)
 
 
 if __name__ == "__main__":
