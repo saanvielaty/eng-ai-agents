@@ -1,0 +1,101 @@
+# Assignment 2 – Detection and Retrieval Scripts
+
+This folder contains two scripts:
+
+- `run_detection.py`
+- `retrieve.py`
+
+Together, these implement the full image-to-video semantic retrieval pipeline.
+
+The system first builds a detection index from video frames, then performs retrieval using a query image. Both scripts use the same trained YOLO model to ensure consistent semantic detection.
+
+---
+
+# `run_detection.py`
+
+## What It Does
+
+This script builds the video detection index.
+
+It:
+
+- Loads a trained YOLO model
+- Runs detection on each sampled video frame
+- Extracts bounding boxes
+- Extracts class labels
+- Extracts confidence scores
+- Associates detections with timestamps
+- Saves all detections to a Parquet file
+
+Each row in the Parquet file represents one detected object in one frame.
+
+## Example Command
+
+```bash
+python3 run_detection.py \
+  --frames_dir frames \
+  --video_id rav4_video \
+  --seconds_per_frame 1 \
+  --model runs/detect/train/weights/best.pt \
+  --conf 0.35 \
+  --out_parquet outputs/rav4_video_detections_carparts.parquet
+```
+
+## Output
+
+The script produces a Parquet file containing:
+
+- `video_id`
+- `frame_index`
+- `timestamp_sec`
+- `class_label`
+- `x_min`
+- `y_min`
+- `x_max`
+- `y_max`
+- `confidence_score`
+- `model_name`
+
+This file serves as the searchable semantic index for retrieval.
+
+---
+
+# `retrieve.py`
+
+## What It Does
+
+This script performs image-to-video retrieval using the detection index.
+
+It:
+
+- Loads a query image from the Hugging Face dataset
+- Runs the same YOLO model on the query image
+- Selects the highest-confidence detected class
+- Filters the detection Parquet file for matching `class_label`
+- Groups timestamps into contiguous segments
+- Ranks segments by number of supporting detections
+- Outputs video segments with YouTube verification links
+
+## Example Command
+
+```bash
+python3 retrieve.py \
+  --detections_parquet outputs/rav4_video_detections_carparts.parquet \
+  --model runs/detect/train/weights/best.pt \
+  --query_index 0 \
+  --max_gap 10 \
+  --top_k 10
+```
+
+## Retrieval Output
+
+The script returns:
+
+- `start_timestamp`
+- `end_timestamp`
+- `class_label`
+- `number_of_supporting_detections`
+- YouTube verification link
+
+The `max_gap` parameter controls how nearby timestamps are merged into one continuous segment.  
+The `top_k` parameter controls how many ranked segments are shown.
