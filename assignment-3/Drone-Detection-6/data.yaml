@@ -1,0 +1,6 @@
+names:
+- drones
+nc: 1
+train: /workspaces/eng-ai-agents/assignment-3/Drone-Detection-6/train/images
+val: /workspaces/eng-ai-agents/assignment-3/Drone-Detection-6/valid/images
+test: /workspaces/eng-ai-agents/assignment-3/Drone-Detection-6/test/images
