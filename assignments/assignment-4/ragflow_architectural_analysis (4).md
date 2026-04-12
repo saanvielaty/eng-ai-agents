@@ -38,17 +38,11 @@ Dense vector representations store documents as numbers in a high-dimensional sp
 
 ```mermaid
 graph LR
-    S1[PDF / DOCX] --> P[Parser and Layout Engine]
-    S2[Database Tables] --> N[Schema Normalizer]
-    S3[Web / APIs] --> C[Crawler and Connector]
-    P --> E[Entity Extractor]
-    N --> E
-    C --> E
-    E --> V[Validator and Deduplicator]
-    V --> II[Incremental Indexer]
-    II --> VDB[(Vector Index)]
-    II --> KV[(Metadata Store)]
-    II --> KG[(Knowledge Graph)]
+    A[PDF / DOCX / API] --> B[Parser and Normalizer]
+    B --> C[Entity Extractor]
+    C --> D[Incremental Indexer]
+    D --> E[(Vector Index)]
+    D --> F[(Metadata Store)]
 ```
 
 A good ingestion system has to handle data that comes in completely different formats.  The schema normalizer solves this by converting everything into a standard format with the same fields regardless of where it came from. Making sure fields are stored in the same format is important because mismatches cause bugs that are hard to track down.  For incremental indexing, each document is given a hash when it is first ingested. When the same document comes in again, the system checks if the hash changed and only reprocesses it if something is different. This avoids reprocessing the entire corpus every time. One issue is that vector indexes are good at adding new documents but not at removing them. Deleted documents have to be marked and cleaned up later, which means they can briefly still show up in search results after being removed. The consistency versus throughput trade-off is about how quickly documents need to be searchable. Processing documents immediately means they are searchable right away but slows down how many can be handled at once. Using a message queue to batch and process documents in the background handles much more volume but means there is a short delay before a new document can be found in search.
@@ -62,37 +56,16 @@ Vector memory saves each conversation turn as an embedding and stores it in a ve
 
 ```mermaid
 graph TB
-    subgraph Ingestion Plane
-        IC[Ingest Coordinator] --> MQ[Message Queue]
-        MQ --> PW[Parser Workers]
-        PW --> EW[Embedding Workers]
-        EW --> IW[Index Writers]
-    end
-    subgraph Retrieval Plane
-        QS[Query Service] --> QR[Query Rewriter]
-        QR --> RS[Retrieval Service]
-        RS --> RR[Re-Ranker Service]
-    end
-    subgraph Reasoning Plane
-        AS[Agent Service]
-        MS[Memory Service]
-        AS <--> MS
-    end
-    subgraph Storage Layer
-        VI[(Vector Index)]
-        ES[(Lexical Index)]
-        KG2[(Knowledge Graph)]
-        DB[(Relational DB)]
-    end
-    Client --> QS
-    Client --> AS
+    Client --> QS[Query Service]
+    Client --> AS[Agent Service]
+    QS --> RS[Retrieval Service]
+    RS --> RR[Re-Ranker]
     RR --> AS
-    IW --> VI
-    IW --> ES
-    RS --> VI
-    RS --> ES
-    RS --> KG2
-    MS --> DB
+    AS --> MS[Memory Service]
+    IC[Ingest Coordinator] --> MQ[Message Queue]
+    MQ --> PW[Parser Workers]
+    PW --> EW[Embedding Workers]
+    EW --> IW[Index Writers]
 ```
 
 The ingestion plane is responsible for converting raw documents into indexed knowledge. The Ingest Coordinator puts jobs onto a message queue so that document uploads and processing happen separately. This means a sudden spike in uploads does not slow down the rest of the system. Parser Workers and Embedding Workers are stateless, meaning any instance can handle any job, so they can be scaled up easily by adding more. Parser Workers use CPU and Embedding Workers use GPU, so they need to be scaled differently. Index Writers are stateful because they need to know exactly where in storage each document belongs.  The retrieval plane is fully stateless, meaning every service in it can be replicated freely. The Query Rewriter changes the query if needed, the Retrieval Service searches all indexes at the same time, and the Re-Ranker scores and ranks the results. If the Re-Ranker gets too slow, a circuit breaker kicks in and the system returns unranked results instead of making the user wait or getting no response at all.  The Agent Service in the reasoning plane is stateful because it keeps track of what happened in the conversation so far. That session data can either stay on one instance or be stored so any instance can pick it up if needed. The message queue between the ingestion and retrieval planes keeps the two sides independent. If ingestion gets backed up it does not affect search, and if search goes down documents can still be ingested.
